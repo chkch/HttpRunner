@@ -1,7 +1,7 @@
 - config:
     name: basic test with httpbin
     request:
-        base_url: http://httpbin.org/
+        base_url: https://httpbin.org/
 
 - test:
     name: index
@@ -76,7 +76,7 @@
         method: GET
     validate:
         - eq: ["status_code", 200]
-        - eq: [cookies.name, "value"]
+        # - eq: [cookies.name, "value"]
 
 - test:
     name: post data
@@ -89,5 +89,12 @@
     validate:
         - eq: ["status_code", 200]
 
-
-
+- test:
+    name: validate content length
+    request:
+        url: /spec.json
+        method: GET
+    validate:
+        - len_eq: ["content", 9]
+        - len_eq: ["json", 9]
+        - len_eq: ["text", 9]

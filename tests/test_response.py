@@ -1,7 +1,8 @@
 import requests
 from httprunner import built_in, exceptions, loader, response
 from httprunner.compat import basestring, bytes
-from tests.base import HTTPBIN_SERVER, ApiServerUnittest
+from tests.api_server import HTTPBIN_SERVER
+from tests.base import ApiServerUnittest
 
 
 class TestResponse(ApiServerUnittest):
@@ -135,7 +136,7 @@ class TestResponse(ApiServerUnittest):
         ]
         extract_binds_dict = resp_obj.extract_response(extract_binds_list)
         self.assertGreater(extract_binds_dict["resp_elapsed_microseconds"], 1000)
-        self.assertLess(extract_binds_dict["resp_elapsed_seconds"], 3)
+        self.assertLess(extract_binds_dict["resp_elapsed_seconds"], 10)
         self.assertEqual(extract_binds_dict["resp_elapsed_days"], 0)
         self.assertGreater(extract_binds_dict["resp_elapsed_total_seconds"], 0)
 

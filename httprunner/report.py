@@ -6,14 +6,13 @@ import platform
 import time
 import unittest
 from base64 import b64encode
-from collections import Iterable, OrderedDict
+from collections import Iterable
 from datetime import datetime
 
-from httprunner import logger
+from httprunner import loader, logger
 from httprunner.__about__ import __version__
 from httprunner.compat import basestring, bytes, json, numeric_types
 from jinja2 import Template, escape
-from requests.structures import CaseInsensitiveDict
 
 
 def get_platform():
@@ -25,6 +24,7 @@ def get_platform():
         ),
         "platform": platform.platform()
     }
+
 
 def get_summary(result):
     """ get summary from test result
@@ -58,6 +58,25 @@ def get_summary(result):
 
     return summary
 
+
+def aggregate_stat(origin_stat, new_stat):
+    """ aggregate new_stat to origin_stat.
+
+    Args:
+        origin_stat (dict): origin stat dict, will be updated with new_stat dict.
+        new_stat (dict): new stat dict.
+
+    """
+    for key in new_stat:
+        if key not in origin_stat:
+            origin_stat[key] = new_stat[key]
+        elif key == "start_at":
+            # start datetime
+            origin_stat[key] = min(origin_stat[key], new_stat[key])
+        else:
+            origin_stat[key] += new_stat[key]
+
+
 def render_html_report(summary, html_report_name=None, html_report_template=None):
     """ render html report with specified report name and template
         if html_report_name is not specified, use current datetime
@@ -76,7 +95,7 @@ def render_html_report(summary, html_report_name=None, html_report_template=None
     logger.log_info("Start to render Html report ...")
     logger.log_debug("render data: {}".format(summary))
 
-    report_dir_path = os.path.join(os.getcwd(), "reports")
+    report_dir_path = os.path.join(loader.project_working_directory, "reports")
     start_at_timestamp = int(summary["time"]["start_at"])
     summary["time"]["start_datetime"] = datetime.fromtimestamp(start_at_timestamp).strftime('%Y-%m-%d %H:%M:%S')
     if html_report_name:
@@ -111,6 +130,7 @@ def render_html_report(summary, html_report_name=None, html_report_template=None
     logger.log_info("Generated Html report: {}".format(report_path))
 
     return report_path
+
 
 def stringify_data(meta_data, request_or_response):
     """
@@ -151,6 +171,7 @@ def stringify_data(meta_data, request_or_response):
 
         meta_data[request_or_response][key] = value
 
+
 class HtmlTestResult(unittest.TextTestResult):
     """A html result class that can generate formatted html results.
 
@@ -161,12 +182,16 @@ class HtmlTestResult(unittest.TextTestResult):
         self.records = []
 
     def _record_test(self, test, status, attachment=''):
-        self.records.append({
+        data = {
             'name': test.shortDescription(),
             'status': status,
             'attachment': attachment,
-            "meta_data": test.meta_data
-        })
+            "meta_data": {}
+        }
+        if hasattr(test, "meta_data"):
+            data["meta_data"] = test.meta_data
+
+        self.records.append(data)
 
     def startTestRun(self):
         self.start_at = time.time()

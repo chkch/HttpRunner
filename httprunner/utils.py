@@ -1,34 +1,16 @@
 # encoding: utf-8
 
 import copy
-import hashlib
-import hmac
 import io
 import itertools
 import json
 import os.path
-import random
 import string
 from datetime import datetime
 
 from httprunner import exceptions, logger
 from httprunner.compat import OrderedDict, basestring, is_py2
 
-SECRET_KEY = "DebugTalk"
-
-
-def gen_random_string(str_len):
-    return ''.join(
-        random.choice(string.ascii_letters + string.digits) for _ in range(str_len))
-
-def gen_md5(*str_args):
-    return hashlib.md5("".join(str_args).encode('utf-8')).hexdigest()
-
-def get_sign(*args):
-    content = ''.join(args).encode('ascii')
-    sign_key = SECRET_KEY.encode('ascii')
-    sign = hmac.new(sign_key, content, hashlib.sha1).hexdigest()
-    return sign
 
 def remove_prefix(text, prefix):
     """ remove prefix from text
@@ -145,9 +127,32 @@ def deep_update_dict(origin_dict, override_dict):
 
 def lower_dict_keys(origin_dict):
     """ convert keys in dict to lower case
-    e.g.
-        Name => name, Request => request
-        URL => url, METHOD => method, Headers => headers, Data => data
+
+    Args:
+        origin_dict (dict): mapping data structure
+
+    Returns:
+        dict: mapping with all keys lowered.
+
+    Examples:
+        >>> origin_dict = {
+            "Name": "",
+            "Request": "",
+            "URL": "",
+            "METHOD": "",
+            "Headers": "",
+            "Data": ""
+        }
+        >>> lower_dict_keys(origin_dict)
+            {
+                "name": "",
+                "request": "",
+                "url": "",
+                "method": "",
+                "headers": "",
+                "data": ""
+            }
+
     """
     if not origin_dict or not isinstance(origin_dict, dict):
         return origin_dict
@@ -157,60 +162,63 @@ def lower_dict_keys(origin_dict):
         for key, value in origin_dict.items()
     }
 
-def lower_config_dict_key(config_dict):
-    """ convert key in config dict to lower case, convertion will occur in three places:
-        1, all keys in config dict;
-        2, all keys in config["request"]
-        3, all keys in config["request"]["headers"]
+def lower_test_dict_keys(test_dict):
+    """ convert keys in test_dict to lower case, convertion will occur in two places:
+        1, all keys in test_dict;
+        2, all keys in test_dict["request"]
     """
-    # convert keys in config dict
-    config_dict = lower_dict_keys(config_dict)
+    # convert keys in test_dict
+    test_dict = lower_dict_keys(test_dict)
 
-    if "request" in config_dict:
-        # convert keys in config["request"]
-        config_dict["request"] = lower_dict_keys(config_dict["request"])
+    if "request" in test_dict:
+        # convert keys in test_dict["request"]
+        test_dict["request"] = lower_dict_keys(test_dict["request"])
 
-        # convert keys in config["request"]["headers"]
-        if "headers" in config_dict["request"]:
-            config_dict["request"]["headers"] = lower_dict_keys(config_dict["request"]["headers"])
+    return test_dict
 
-    return config_dict
+def convert_mappinglist_to_orderdict(mapping_list):
+    """ convert mapping list to ordered dict
 
-def convert_to_order_dict(map_list):
-    """ convert mapping in list to ordered dict
-    @param (list) map_list
-        [
-            {"a": 1},
-            {"b": 2}
-        ]
-    @return (OrderDict)
-        OrderDict({
-            "a": 1,
-            "b": 2
-        })
+    Args:
+        mapping_list (list):
+            [
+                {"a": 1},
+                {"b": 2}
+            ]
+
+    Returns:
+        OrderedDict: converted mapping in OrderedDict
+            OrderDict(
+                {
+                    "a": 1,
+                    "b": 2
+                }
+            )
+
     """
     ordered_dict = OrderedDict()
-    for map_dict in map_list:
+    for map_dict in mapping_list:
         ordered_dict.update(map_dict)
 
     return ordered_dict
 
+
 def update_ordered_dict(ordered_dict, override_mapping):
-    """ override ordered_dict with new mapping
-    @param
-        (OrderDict) ordered_dict
-            OrderDict({
-                "a": 1,
-                "b": 2
-            })
-        (dict) override_mapping
-            {"a": 3, "c": 4}
-    @return (OrderDict)
-        OrderDict({
-            "a": 3,
-            "b": 2,
-            "c": 4
-        })
+    """ override ordered_dict with new mapping.
+
+    Args:
+        ordered_dict (OrderDict): original ordered dict
+        override_mapping (dict): new variables mapping
+
+    Returns:
+        OrderDict: new overrided variables mapping.
+
+    Examples:
+        >>> ordered_dict = OrderDict({"a": 1, "b": 2})
+        >>> override_mapping = {"a": 3, "c": 4}
+        >>> update_ordered_dict(ordered_dict, override_mapping)
+            OrderDict({"a": 3, "b": 2, "c": 4})
+
     """
     new_ordered_dict = copy.copy(ordered_dict)
     for var, value in override_mapping.items():
@@ -218,11 +226,43 @@ def update_ordered_dict(ordered_dict, override_mapping):
 
     return new_ordered_dict
 
-def override_variables_binds(variables, new_mapping):
-    """ convert variables in testcase to ordered mapping, with new_mapping overrided
+
+def override_mapping_list(variables, new_mapping):
+    """ override variables with new mapping.
+
+    Args:
+        variables (list): variables list
+            [
+                {"var_a": 1},
+                {"var_b": "world"}
+            ]
+        new_mapping (dict): overrided variables mapping
+            {
+                "var_a": "hello"
+            }
+
+    Returns:
+        OrderedDict: overrided variables mapping.
+
+    Examples:
+        >>> variables = [
+                {"var_a": 1},
+                {"var_b": "world"}
+            ]
+        >>> new_mapping = {
+                "var_a": "hello"
+            }
+        >>> override_mapping_list(variables, new_mapping)
+            OrderedDict(
+                {
+                    "var_a": "hello",
+                    "var_b": "world"
+                }
+            )
+
     """
     if isinstance(variables, list):
-        variables_ordered_dict = convert_to_order_dict(variables)
+        variables_ordered_dict = convert_mappinglist_to_orderdict(variables)
     elif isinstance(variables, (OrderedDict, dict)):
         variables_ordered_dict = variables
     else:
@@ -233,18 +273,68 @@ def override_variables_binds(variables, new_mapping):
         new_mapping
     )
 
-def print_output(outputs):
 
-    if not outputs:
-        return
+def get_testcase_io(testcase):
+    """ get testcase input(variables) and output.
 
+    Args:
+        testcase (unittest.suite.TestSuite): corresponding to one YAML/JSON file, it has been set two attributes:
+            config: parsed config block
+            runner: initialized runner.Runner() with config
+
+    Returns:
+        dict: input(variables) and output mapping.
+
+    """
+    runner = testcase.runner
+    variables = testcase.config.get("variables", [])
+    output_list = testcase.config.get("output", [])
+
+    return {
+        "in": dict(variables),
+        "out": runner.extract_output(output_list)
+    }
+
+
+def print_io(in_out):
+    """ print input(variables) and output.
+
+    Args:
+        in_out (dict): input(variables) and output mapping.
+
+    Examples:
+        >>> in_out = {
+                "in": {
+                    "var_a": "hello",
+                    "var_b": "world"
+                },
+                "out": {
+                    "status_code": 500
+                }
+            }
+        >>> print_io(in_out)
+        ================== Variables & Output ==================
+        Type   | Variable         :  Value
+        ------ | ---------------- :  ---------------------------
+        Var    | var_a            :  hello
+        Var    | var_b            :  world
+
+        Out    | status_code      :  500
+        --------------------------------------------------------
+
+    """
+    content_format = "{:<6} | {:<16} :  {:<}\n"
     content = "\n================== Variables & Output ==================\n"
-    content += '{:<6} | {:<16} :  {:<}\n'.format("Type", "Variable", "Value")
-    content += '{:<6} | {:<16} :  {:<}\n'.format("-" * 6, "-" * 16, "-" * 27)
+    content += content_format.format("Type", "Variable", "Value")
+    content += content_format.format("-" * 6, "-" * 16, "-" * 27)
 
     def prepare_content(var_type, in_out):
         content = ""
         for variable, value in in_out.items():
+            if isinstance(value, tuple):
+                continue
+            elif isinstance(value, (dict, list)):
+                value = json.dumps(value)
 
             if is_py2:
                 if isinstance(variable, unicode):
@@ -252,31 +342,30 @@ def print_output(outputs):
                 if isinstance(value, unicode):
                     value = value.encode("utf-8")
 
-            content += '{:<6} | {:<16} :  {:<}\n'.format(var_type, variable, value)
+            content += content_format.format(var_type, variable, value)
 
         return content
 
-    for output in outputs:
-        _in = output["in"]
-        _out = output["out"]
+    _in = in_out["in"]
+    _out = in_out["out"]
 
-        if not _out:
-            continue
-
-        content += prepare_content("Var", _in)
-        content += "\n"
-        content += prepare_content("Out", _out)
-        content += "-" * 56 + "\n"
+    content += prepare_content("Var", _in)
+    content += "\n"
+    content += prepare_content("Out", _out)
+    content += "-" * 56 + "\n"
 
     logger.log_debug(content)
 
-def create_scaffold(project_path):
-    if os.path.isdir(project_path):
-        folder_name = os.path.basename(project_path)
-        logger.log_warning(u"Folder {} exists, please specify a new folder name.".format(folder_name))
+
+def create_scaffold(project_name):
+    """ create scaffold with specified project name.
+    """
+    if os.path.isdir(project_name):
+        logger.log_warning(u"Folder {} exists, please specify a new folder name.".format(project_name))
         return
 
-    logger.color_print("Start to create new project: {}\n".format(project_path), "GREEN")
+    logger.color_print("Start to create new project: {}".format(project_name), "GREEN")
+    logger.color_print("CWD: {}\n".format(os.getcwd()), "BLUE")
 
     def create_path(path, ptype):
         if ptype == "folder":
@@ -284,22 +373,19 @@ def create_scaffold(project_path):
         elif ptype == "file":
             open(path, 'w').close()
 
-        return "created {}: {}\n".format(ptype, path)
+        msg = "created {}: {}".format(ptype, path)
+        logger.color_print(msg, "BLUE")
 
     path_list = [
-        (project_path, "folder"),
-        (os.path.join(project_path, "tests"), "folder"),
-        (os.path.join(project_path, "tests", "api"), "folder"),
-        (os.path.join(project_path, "tests", "suite"), "folder"),
-        (os.path.join(project_path, "tests", "testcases"), "folder"),
-        (os.path.join(project_path, "tests", "debugtalk.py"), "file")
+        (project_name, "folder"),
+        (os.path.join(project_name, "api"), "folder"),
+        (os.path.join(project_name, "testcases"), "folder"),
+        (os.path.join(project_name, "testsuites"), "folder"),
+        (os.path.join(project_name, "reports"), "folder"),
+        (os.path.join(project_name, "debugtalk.py"), "file"),
+        (os.path.join(project_name, ".env"), "file")
     ]
-
-    msg = ""
-    for p in path_list:
-        msg += create_path(p[0], p[1])
-
-    logger.color_print(msg, "BLUE")
+    [create_path(p[0], p[1]) for p in path_list]
 
 
 def gen_cartesian_product(*args):
@@ -354,6 +440,7 @@ def validate_json_file(file_list):
 
         print("OK")
 
+
 def prettify_json_file(file_list):
     """ prettify JSON testset format
     """
@@ -379,6 +466,7 @@ def prettify_json_file(file_list):
             out.write('\n')
 
         print("success: {}".format(outfile))
+
 
 def get_python2_retire_msg():
     retire_day = datetime(2020, 1, 1)
